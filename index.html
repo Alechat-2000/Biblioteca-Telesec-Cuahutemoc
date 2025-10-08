@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Biblioteca Telesecundaria Cuauhtémoc</title>
+  <style>
+    body { font-family: Arial; margin:0; background:#f0f0f0; }
+    #login-box { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; }
+    #login-box input, #login-box button { width:250px; padding:8px; margin:8px 0; border-radius:6px; border:1px solid #ccc; }
+    #login-box button { background:#4CAF50; color:white; border:none; cursor:pointer; }
+    #sistema { display:none; background:#f6f7fb; }
+    header { background:linear-gradient(90deg,#1e40af,#2563eb); color:white; padding:18px; }
+    .container { max-width:1100px; margin:auto; padding:16px; }
+    .grid { display:grid; grid-template-columns:360px 1fr; gap:18px; }
+    .card { background:white; padding:14px; border-radius:10px; box-shadow:0 6px 18px rgba(16,24,40,0.06); }
+    label { display:block; font-size:13px; margin-top:8px; color:#6b7280; }
+    input[type=text] { width:100%; padding:8px; margin-top:6px; border-radius:6px; border:1px solid #e6e9ef; }
+    button { padding:8px 10px; border-radius:8px; border:0; background:#2463eb; color:white; cursor:pointer; }
+    .small { font-size:13px; padding:6px 8px; }
+    .danger { background:#ef4444; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { padding:8px; text-align:left; border-bottom:1px solid #f1f5f9; font-size:14px; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-box">
+  <h2>Acceso Biblioteca</h2>
+  <input type="password" id="password" placeholder="Contraseña">
+  <button onclick="login()">Entrar</button>
+  <p id="error" style="color:red;display:none;">Contraseña incorrecta</p>
+</div>
+
+<!-- SISTEMA -->
+<div id="sistema">
+  <header>
+    <div class="container">
+      <h1>Biblioteca Telesecundaria Cuauhtémoc</h1>
+      <div style="color:#e5e7eb;font-size:14px">Gestión de libros y préstamos.</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid">
+      <div class="card">
+        <strong>Agregar / Editar libro</strong>
+        <form id="bookForm">
+          <label>Título *</label>
+          <input id="title" type="text" required>
+          <label>Autor</label>
+          <input id="author" type="text">
+          <label>Categoría *</label>
+          <input id="category" type="text" required>
+          <div style="margin-top:12px">
+            <button type="submit">Guardar libro</button>
+          </div>
+        </form>
+        <hr>
+        <button id="clearBtn" class="danger small">Borrar todo</button>
+      </div>
+
+      <div class="card">
+        <strong>Libros</strong>
+        <table id="booksTable">
+          <thead>
+            <tr>
+              <th>#</th><th>Título</th><th>Autor</th><th>Categoría</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="booksTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- FIREBASE + SISTEMA -->
+<script type="module">
+  // --- Importar Firebase ---
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, writeBatch } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+
+  // --- Configuración de tu Firebase ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyDVEtKiYTOvTqqgvI3SK5nWsCo1n9aM4Yw",
+    authDomain: "biblioteca-tele-cuahutemoc.firebaseapp.com",
+    projectId: "biblioteca-tele-cuahutemoc",
+    storageBucket: "biblioteca-tele-cuahutemoc.firebasestorage.app",
+    messagingSenderId: "591855309337",
+    appId: "1:591855309337:web:c0b5453da645cba1f75088"
+  };
+
+  // Inicializar Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const booksRef = collection(db, "libros");
+
+  // --- LOGIN ---
+  window.login = function () {
+    const pass = document.getElementById("password").value;
+    if (pass === "biblioteca cuahutemoc") {
+      document.getElementById("login-box").style.display = "none";
+      document.getElementById("sistema").style.display = "block";
+      renderBooks();
+    } else {
+      document.getElementById("error").style.display = "block";
+    }
+  };
+
+  // --- GUARDAR LIBRO ---
+  const bookForm = document.getElementById("bookForm");
+  const booksTbody = document.getElementById("booksTbody");
+
+  bookForm.addEventListener("submit", async e => {
+    e.preventDefault();
+    const titulo = document.getElementById("title").value.trim();
+    const autor = document.getElementById("author").value.trim();
+    const categoria = document.getElementById("category").value.trim();
+
+    if (!titulo || !categoria) return alert("Falta título o categoría");
+
+    await addDoc(booksRef, { titulo, autor, categoria });
+    bookForm.reset();
+    renderBooks();
+  });
+
+  // --- MOSTRAR LIBROS ---
+  async function renderBooks() {
+    const querySnapshot = await getDocs(booksRef);
+    booksTbody.innerHTML = "";
+    let i = 1;
+    querySnapshot.forEach(docu => {
+      const b = docu.data();
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${i++}</td>
+        <td>${b.titulo}</td>
+        <td>${b.autor}</td>
+        <td>${b.categoria}</td>
+        <td><button class="danger small" onclick="deleteBook('${docu.id}')">Eliminar</button></td>
+      `;
+      booksTbody.appendChild(tr);
+    });
+  }
+
+  // --- ELIMINAR LIBRO ---
+  window.deleteBook = async function (id) {
+    if (confirm("¿Eliminar este libro?")) {
+      await deleteDoc(doc(db, "libros", id));
+      renderBooks();
+    }
+  };
+
+  // --- BORRAR TODOS ---
+  document.getElementById("clearBtn").addEventListener("click", async () => {
+    if (confirm("¿Borrar todos los libros?")) {
+      const snapshot = await getDocs(booksRef);
+      const batch = writeBatch(db);
+      snapshot.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      renderBooks();
+    }
+  });
+</script>
+
+</body>
+</html>
